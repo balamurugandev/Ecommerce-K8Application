@@ -1,0 +1,119 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-east-1'  // Change to your AWS region
+        TERRAFORM_DIR = 'terraform/'
+        K8S_DIR = 'k8s/'
+        DOCKER_REGISTRY = 'your-docker-registry-url' // Replace with your Docker Registry URL (ECR or Docker Hub)
+        FRONTEND_IMAGE = 'frontend-image-name' // Docker image name for frontend
+        BACKEND_IMAGE = 'backend-image-name'   // Docker image name for backend
+        MONGO_IMAGE = 'mongo-image-name'       // Docker image name for MongoDB
+        DOCKER_CREDENTIALS_ID = 'docker-credentials-id' // Jenkins Docker credentials ID
+        AWS_CREDENTIALS_ID = 'aws-credentials-id'      // Jenkins AWS credentials ID
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                script {
+                    // Checkout the project from GitHub or another SCM
+                    checkout scm
+                }
+            }
+        }
+
+        stage('Terraform Init & Plan') {
+            steps {
+                script {
+                    dir(TERRAFORM_DIR) {
+                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: AWS_CREDENTIALS_ID]]) {
+                            sh 'terraform init'
+                            sh 'terraform plan'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                script {
+                    dir(TERRAFORM_DIR) {
+                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: AWS_CREDENTIALS_ID]]) {
+                            sh 'terraform apply -auto-approve'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build & Push') {
+            parallel {
+                stage('Build & Push Frontend Image') {
+                    steps {
+                        script {
+                            docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDENTIALS_ID) {
+                                sh 'docker build -t ${DOCKER_REGISTRY}/${FRONTEND_IMAGE}:latest ./frontend'
+                                sh 'docker push ${DOCKER_REGISTRY}/${FRONTEND_IMAGE}:latest'
+                            }
+                        }
+                    }
+                }
+
+                stage('Build & Push Backend Image') {
+                    steps {
+                        script {
+                            docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDENTIALS_ID) {
+                                sh 'docker build -t ${DOCKER_REGISTRY}/${BACKEND_IMAGE}:latest ./backend'
+                                sh 'docker push ${DOCKER_REGISTRY}/${BACKEND_IMAGE}:latest'
+                            }
+                        }
+                    }
+                }
+
+                stage('Build & Push MongoDB Image') {
+                    steps {
+                        script {
+                            docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDENTIALS_ID) {
+                                sh 'docker build -t ${DOCKER_REGISTRY}/${MONGO_IMAGE}:latest ./mongo'
+                                sh 'docker push ${DOCKER_REGISTRY}/${MONGO_IMAGE}:latest'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: AWS_CREDENTIALS_ID]]) {
+                        sh 'aws eks --region ${AWS_REGION} update-kubeconfig --name my-k8s-cluster' // Update kubeconfig
+                        sh 'kubectl apply -f ${K8S_DIR}'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                echo 'Cleaning up workspace'
+                deleteDir()
+            }
+        }
+        success {
+            script {
+                echo 'Pipeline executed successfully'
+            }
+        }
+        failure {
+            script {
+                echo 'Pipeline failed'
+            }
+        }
+    }
+}
