@@ -63,61 +63,85 @@ Before starting, make sure you have the following tools installed:
 │   └── services.yml             # Kubernetes service files for all components
 └── Jenkinsfile              # Jenkins pipeline configuration
 
+```
 
-Navigate to the terraform/ directory.
+## Navigate to the terraform/ directory.
 
+```bash
 cd terraform/
+```
 
 Initialize Terraform to download the required provider plugins.
 
+```bash
 terraform init
+```
 
 Review the infrastructure changes with:
 
+```bash
 terraform plan
+```
 
 Apply the infrastructure changes:
 
+
+```bash
 terraform apply
+```
 
 Terraform will provision the AWS infrastructure, including VPC, subnets, security groups, and an EKS cluster.
 
 Retrieve the kubeconfig file for your EKS cluster:
 
+```bash
 aws eks --region <your-region> update-kubeconfig --name <your-cluster-name>
-
+```
 
 Docker Setup
 
 Navigate to each of the service directories (frontend, backend, mongo) and build the Docker images.
 
+
+```bash
 docker build -t <your-docker-registry>/<image-name> .
+```
 
 For example, to build the frontend image:
 
+```bash
 cd frontend/
 docker build -t your-docker-registry/frontend-image .
+```
 
 Push the Docker images to your Docker registry (Docker Hub or AWS ECR).
 
+```bash
 docker push <your-docker-registry>/<image-name>
+```
 
 Kubernetes Deployment
 
 Ensure your kubectl is configured with your AWS EKS cluster credentials:
 
+```bash
 aws eks --region <your-region> update-kubeconfig --name <your-cluster-name>
+```
 
 Navigate to the k8s/ directory:
 
+```bash
 cd k8s/
+```
 
 Deploy the services and deployments using the following command:
 
+```bash
 kubectl apply -f .
-
+```
 Verify the pods and services are running:
 
+```bash
 kubectl get pods
 kubectl get svc
-
+```
